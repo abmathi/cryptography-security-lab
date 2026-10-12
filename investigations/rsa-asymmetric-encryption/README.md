@@ -296,3 +296,204 @@ However, successful decryption and matching file hashes do not independently est
 The recovered file contained the expected message, produced an identical SHA-256 digest, and passed a direct byte-for-byte comparison.
 
 This confirmed successful RSA encryption and decryption for the small test file and established a baseline for the independent hybrid-encryption investigation.
+
+### Finding 3 — Independent RSA Size-Limit Testing and Hybrid Encryption
+
+#### Investigation Context
+
+To extend the guided RSA exercise, I investigated whether RSA could directly encrypt a larger file.
+
+The previous exercises demonstrated successful public-key encryption and private-key decryption of a small plaintext file. The independent investigation tested the limitations of that approach using a 1 KiB file.
+
+After observing an RSA encryption failure, I implemented a hybrid workflow combining RSA and AES-256-CBC to protect the larger file.
+
+The objective was to understand why bulk data encryption is normally performed with symmetric cryptography and how asymmetric encryption can be used to protect the smaller secret material required for recovery.
+
+#### Direct RSA Encryption Size Limitation
+
+I first attempted to encrypt `large_file.bin` using the RSA public key:
+
+```bash
+openssl pkeyutl \
+  -encrypt \
+  -in large_file.bin \
+  -pubin \
+  -inkey public_key.pem \
+  -out large_file_encrypted.bin
+```
+
+OpenSSL rejected the operation with the error:
+
+```text
+Public Key operation error
+rsa routines:ossl_rsa_padding_add_PKCS1_type_2_ex:
+data too large for key size
+```
+
+The file was approximately 1 KiB, exceeding the maximum plaintext size supported by a single RSA encryption operation using the configured key and padding.
+
+With a 2048-bit RSA key and PKCS#1 v1.5 encryption padding, the maximum plaintext size is 245 bytes.
+
+The failed operation demonstrated a practical limitation of direct RSA encryption rather than a failure of the RSA key pair.
+
+#### Hybrid Encryption Design
+
+To address the size limitation, I implemented a two-part encryption workflow:
+
+1. Encrypt the larger file using AES-256-CBC.
+2. Encrypt the AES passphrase material using the RSA public key.
+
+The recipient can reverse the process by recovering the passphrase with the RSA private key and using it to decrypt the AES ciphertext.
+
+This approach separates bulk-data encryption from protection of the smaller secret required for decryption.
+
+#### AES Encryption of the Larger File
+
+I generated random passphrase material and restricted access to its file:
+
+```bash
+openssl rand -base64 32 > file_secret.txt
+chmod 600 file_secret.txt
+```
+
+I then encrypted the larger file:
+
+```bash
+openssl enc -aes-256-cbc \
+  -salt \
+  -pbkdf2 \
+  -iter 100000 \
+  -in large_file.bin \
+  -out large_file.enc \
+  -pass file:file_secret.txt
+```
+
+The command used AES-256-CBC with PBKDF2 and 100,000 iterations.
+
+| Artifact | Observed Size | Purpose |
+| --- | --- | --- |
+| `large_file.bin` | 1.0 KiB | Original test data |
+| `large_file.enc` | 1.1 KiB | AES-encrypted file |
+| `file_secret.txt` | 45 bytes | Random passphrase material |
+
+The encrypted output was larger than the original due to the salted file format and block-aligned ciphertext.
+
+#### RSA Protection of the AES Passphrase
+
+After encrypting the file with AES, I encrypted the smaller passphrase file using the RSA public key:
+
+```bash
+openssl pkeyutl \
+  -encrypt \
+  -in file_secret.txt \
+  -pubin \
+  -inkey public_key.pem \
+  -out file_secret.enc
+```
+
+The resulting `file_secret.enc` artifact was 256 bytes, consistent with the RSA key's 2048-bit modulus.
+
+| Artifact | Size | Purpose |
+| --- | --- | --- |
+| `file_secret.txt` | 45 bytes | Original passphrase material |
+| `file_secret.enc` | 256 bytes | RSA-encrypted passphrase |
+
+This operation succeeded because the passphrase file was small enough to fit within the RSA encryption operation's message-size limit.
+
+The workflow encrypted passphrase material rather than directly wrapping a raw AES key.
+
+#### RSA Private-Key Recovery
+
+I recovered the passphrase material using the RSA private key:
+
+```bash
+openssl pkeyutl \
+  -decrypt \
+  -in file_secret.enc \
+  -inkey private_key.pem \
+  -out recovered_secret.txt
+```
+
+The command completed and produced the recovered passphrase file.
+
+I then used the recovered passphrase to decrypt the AES-protected data:
+
+```bash
+openssl enc -d -aes-256-cbc \
+  -pbkdf2 \
+  -iter 100000 \
+  -in large_file.enc \
+  -out recovered_large_file.bin \
+  -pass file:recovered_secret.txt
+```
+
+The operation successfully recovered the larger file without attempting to decrypt the bulk data directly with RSA.
+
+#### Recovery Verification
+
+To verify recovery, I calculated SHA-256 hashes for the original and recovered files:
+
+```bash
+sha256sum large_file.bin recovered_large_file.bin
+```
+
+Both files produced the same SHA-256 digest:
+
+```text
+e14c001b653bf8c9570f7a560e0fe1e57bffd0c7494ec0624e559f47e569e887
+```
+
+I also performed a byte-for-byte comparison:
+
+```bash
+cmp large_file.bin recovered_large_file.bin &&
+  echo "Recovered file is identical"
+```
+
+The output confirmed:
+
+```text
+Recovered file is identical
+```
+
+| Verification | Result |
+| --- | --- |
+| Direct RSA encryption of larger file | Failed due to message-size limitation |
+| AES-256-CBC encryption | Completed |
+| RSA encryption of passphrase | Completed |
+| RSA private-key passphrase recovery | Completed |
+| AES file decryption | Completed |
+| SHA-256 comparison | Matching digests |
+| `cmp` comparison | Files identical |
+
+![Hybrid RSA and AES encryption validation](evidence/03-hybrid-encryption-validation.png)
+
+*Figure 3 — Independent RSA/AES hybrid encryption exercise showing the RSA message-size error, AES-256-CBC encryption with PBKDF2, RSA protection and recovery of passphrase material, and successful file recovery validated by matching SHA-256 hashes and `cmp`.*
+
+The matching hashes and successful comparison confirmed that the hybrid workflow recovered the original file without observed content changes.
+
+#### Security Relevance
+
+Hybrid encryption combines the efficiency of symmetric encryption for bulk data with the public/private key separation provided by asymmetric encryption.
+
+The independent exercise demonstrated why RSA should not be used directly to encrypt arbitrary-size files.
+
+It also demonstrated a practical recovery workflow in which the RSA private key was required to recover the secret material used for AES decryption.
+
+However, this implementation was a learning exercise rather than a production-ready cryptographic file format.
+
+The `openssl pkeyutl` commands used default RSA encryption padding, and the AES-CBC ciphertext did not include authenticated integrity protection.
+
+A production design would require appropriate RSA padding, such as OAEP, an authenticated encryption scheme, secure private-key storage, and careful handling of recovered secret material.
+
+#### Analyst Assessment
+
+**Assessment: RSA's direct-encryption size limitation identified and a hybrid RSA/AES encryption workflow successfully validated.**
+
+The initial RSA operation failed when attempting to encrypt the 1 KiB file.
+
+The hybrid approach successfully encrypted the larger file using AES-256-CBC, protected the passphrase material using RSA, and recovered the original file using the corresponding private key.
+
+Matching SHA-256 hashes and a byte-for-byte comparison confirmed successful recovery in the controlled test.
+
+The investigation demonstrated both the practical value of hybrid encryption and the importance of distinguishing successful cryptographic operations from production-level security guarantees.
