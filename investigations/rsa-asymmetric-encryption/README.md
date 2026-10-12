@@ -85,3 +85,114 @@ The report documents three findings:
 3. Independent RSA Size-Limit Testing and Hybrid Encryption
 
 The final sections consolidate security implications, evidence limitations, skills demonstrated, and supporting screenshots.
+
+## Investigation Findings
+
+### Finding 1 — RSA Key Generation and Public-Key Encryption
+
+#### Investigation Context
+
+The first exercise demonstrated asymmetric encryption using RSA and OpenSSL.
+
+The objective was to generate an RSA public/private key pair, encrypt a small plaintext file using the public key, and inspect the resulting ciphertext.
+
+Unlike symmetric encryption, which uses the same secret key for encryption and decryption, RSA uses mathematically related public and private keys.
+
+#### RSA Key Generation
+
+Following the lab procedure, I generated a 2048-bit RSA private key:
+
+```bash
+openssl genpkey -algorithm RSA \
+  -out private_key.pem \
+  -pkeyopt rsa_keygen_bits:2048
+```
+
+I then extracted the corresponding public key:
+
+```bash
+openssl rsa -pubout \
+  -in private_key.pem \
+  -out public_key.pem
+```
+
+| Artifact | Purpose |
+| --- | --- |
+| `private_key.pem` | Private key used for decryption |
+| `public_key.pem` | Public key used for encryption |
+
+The public key can be distributed to an intended sender, while the private key must remain protected.
+
+The key-generation commands are documented in the original exercise instructions; Figure 1 focuses on the subsequent encryption results rather than the key-generation output.
+
+#### Public-Key Encryption
+
+I encrypted a small test file using the RSA public key:
+
+```bash
+openssl pkeyutl \
+  -encrypt \
+  -in test_file.txt \
+  -pubin \
+  -inkey public_key.pem \
+  -out test_file_encrypted.bin
+```
+
+The `-pubin` option identifies `public_key.pem` as a public key, while `-encrypt` performs the public-key encryption operation.
+
+The file-size comparison returned:
+
+| File | Size | Description |
+| --- | ---: | --- |
+| `test_file.txt` | 40 bytes | Original plaintext |
+| `test_file_encrypted.bin` | 256 bytes | RSA ciphertext |
+
+![RSA public-key encryption and ciphertext inspection](evidence/01-rsa-public-key-encryption.png)
+
+*Figure 1 — OpenSSL RSA public-key encryption of a 40-byte plaintext file into a 256-byte ciphertext artifact. Hexadecimal inspection displayed binary output, and a search for the original plaintext phrase returned no match.*
+
+The 256-byte encrypted output is consistent with the modulus size of a 2048-bit RSA key.
+
+This does not mean RSA can encrypt an arbitrary 256-byte plaintext in a single operation. RSA padding reduces the maximum message size.
+
+#### Ciphertext Inspection
+
+I inspected the encrypted output:
+
+```bash
+xxd test_file_encrypted.bin | head
+```
+
+The command displayed binary ciphertext in hexadecimal format.
+
+I then searched the encrypted file for a recognizable phrase from the original plaintext:
+
+```bash
+grep -a "This is a test file" test_file_encrypted.bin
+```
+
+No matching plaintext was returned.
+
+The inspection demonstrated that the tested phrase was not visibly preserved in the ciphertext.
+
+However, the absence of readable plaintext is not sufficient to establish the cryptographic security of an implementation.
+
+#### Security Relevance
+
+Public-key encryption allows a sender to encrypt data without possessing the recipient's private decryption key.
+
+This supports secure communication and key-distribution workflows when RSA is used with appropriate padding, key management, and cryptographic configuration.
+
+RSA is not typically used to encrypt large files directly because a single RSA encryption operation has a strict plaintext size limit.
+
+The independent investigation will examine that limitation and demonstrate a hybrid approach combining RSA and AES.
+
+#### Analyst Assessment
+
+**Assessment: Small-file RSA public-key encryption successfully demonstrated.**
+
+The 40-byte plaintext file was encrypted into a 256-byte RSA ciphertext artifact using the public key.
+
+Hexadecimal inspection and a plaintext-string search provided supporting evidence that the encrypted artifact differed from the original readable file.
+
+The result established a working small-file RSA encryption operation but did not independently validate decryption, authenticity, or suitability for larger files.
