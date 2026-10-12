@@ -406,3 +406,103 @@ However, AES-256-CBC does not independently protect ciphertext integrity. A prod
 The investigation improved the original password-based key derivation configuration, tested incorrect-passphrase behavior, and verified successful recovery through matching SHA-256 hashes and direct file comparison.
 
 The results demonstrated practical encryption and validation skills while identifying the integrity limitations of AES-CBC.
+
+## Security Implications
+
+The investigation demonstrated how encryption configuration, password-based key derivation, and recovery verification contribute to protecting data at rest.
+
+| Security Area | Observation | Security Implication |
+| --- | --- | --- |
+| Symmetric encryption | AES-256-CBC produced encrypted file contents | Encryption can protect plaintext confidentiality when implemented and managed appropriately |
+| Salted file format | OpenSSL's `Salted__` header was identified | Salted encryption formats can be recognized without recovering the plaintext |
+| Legacy key derivation | OpenSSL displayed a deprecated key-derivation warning | Encryption implementations should be reviewed for outdated derivation configurations |
+| PBKDF2 | Independent encryption used 100,000 iterations | Password-based derivation increases the computational cost of password guessing compared with the deprecated workflow |
+| Incorrect-passphrase testing | Decryption returned `bad decrypt` | Incorrect secret material failed to recover the original plaintext in this test |
+| Recovery verification | SHA-256 and `cmp` confirmed matching files | Independent verification helps establish successful data recovery |
+| Integrity protection | AES-CBC alone does not authenticate ciphertext | Encryption must not be confused with protection against unauthorized modification |
+
+### Key Management Considerations
+
+The independent exercise used randomly generated passphrase material stored in a local file with restricted permissions.
+
+This demonstrated a basic approach to separating encryption secrets from the protected data.
+
+However, local file permissions are only one aspect of key management. A production implementation also requires appropriate secret storage, access restrictions, backup and recovery procedures, rotation policies, and protection against unauthorized disclosure.
+
+The investigation did not evaluate a dedicated key-management system or hardware-backed secret storage.
+
+### Authenticated Encryption Considerations
+
+AES-256-CBC provides confidentiality but does not inherently authenticate ciphertext.
+
+The unsuccessful incorrect-passphrase attempt should not be interpreted as proof that ciphertext modification would always be detected.
+
+For production applications requiring both confidentiality and integrity, authenticated encryption, such as AES-GCM when appropriately implemented, is generally preferable.
+
+## Evidence Limitations
+
+This investigation used synthetic test data in an authorized Linux lab environment.
+
+The following limitations apply:
+
+1. **Sample data:** The plaintext files and simulated credentials were created for the exercise. No production credentials or sensitive organizational records were involved.
+
+2. **Evidence scope:** The three screenshots preserve selected terminal outputs rather than a complete command transcript or all intermediate artifacts.
+
+3. **Key derivation:** PBKDF2 with 100,000 iterations was demonstrated, but this exercise did not benchmark password-guessing resistance or establish that the iteration count is appropriate for every threat model.
+
+4. **Ciphertext inspection:** The absence of recognizable plaintext strings in the encrypted artifact is a limited observation, not a cryptographic security proof.
+
+5. **Incorrect-passphrase testing:** One incorrect-passphrase attempt failed. This does not demonstrate resistance to all attacks or provide authenticated-integrity assurance.
+
+6. **File recovery:** Matching SHA-256 hashes and `cmp` results verified the recovered file in the controlled test. They do not prove the ciphertext is protected against malicious modification.
+
+7. **Secret management:** The exercise demonstrated local passphrase-file permissions but did not assess enterprise secret management, rotation, or recovery infrastructure.
+
+## Skills Demonstrated
+
+### Cryptographic Operations
+
+- Performed AES-256-CBC file encryption and decryption using OpenSSL.
+- Examined encrypted file structure and the OpenSSL `Salted__` header.
+- Distinguished passphrase-based key derivation from direct raw-key encryption.
+- Configured PBKDF2 with an explicit iteration count.
+- Interpreted OpenSSL key-derivation warnings.
+
+### Validation and Troubleshooting
+
+- Inspected encrypted artifacts with `file`, `xxd`, and `strings`.
+- Tested ciphertext for recognizable plaintext indicators.
+- Performed an incorrect-passphrase decryption test.
+- Verified successful file recovery using SHA-256.
+- Confirmed byte-for-byte equality using `cmp`.
+- Distinguished successful recovery from authenticated encryption.
+
+### Security Analysis
+
+- Evaluated the confidentiality properties and integrity limitations of AES-CBC.
+- Assessed the security implications of legacy password-based key derivation.
+- Documented secret-handling considerations and implementation limitations.
+- Preserved evidence-based findings without overstating cryptographic guarantees.
+
+## Conclusion
+
+This investigation demonstrated AES-256-CBC file encryption, decryption, and validation using OpenSSL.
+
+The guided exercise established the encryption and recovery workflow while revealing a deprecated key-derivation configuration.
+
+The independent exercise improved the implementation using PBKDF2 with 100,000 iterations, examined the encrypted artifact, tested incorrect-passphrase behavior, and verified successful recovery through SHA-256 hashes and direct file comparison.
+
+The principal outcome was demonstrating that an encryption workflow should be evaluated not only by whether it produces ciphertext, but also by how it derives secrets, verifies recovery, and addresses integrity limitations.
+
+The exercise provides a foundation for understanding cryptographic operations relevant to data protection, security engineering, and incident response.
+
+## Evidence Index
+
+| Figure | Evidence File | Description |
+| --- | --- | --- |
+| 1 | `01-aes-encrypted-file-inspection.png` | AES-256-CBC encryption, salted-file structure, and key-derivation warning |
+| 2 | `02-decryption-integrity-verification.png` | Successful decryption and matching SHA-256 hashes |
+| 3 | `03-independent-encryption-validation.png` | Independent PBKDF2 implementation, negative testing, and file recovery validation |
+
+All screenshots are located in the accompanying [`evidence/`](evidence/) directory.
