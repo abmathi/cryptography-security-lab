@@ -189,7 +189,7 @@ The independent investigation will examine that limitation and demonstrate a hyb
 
 #### Analyst Assessment
 
-**Assessment: Small-file RSA public-key encryption successfully demonstrated.**
+****Assessment: Small-file RSA public-key encryption successfully demonstrated.****
 
 The 40-byte plaintext file was encrypted into a 256-byte RSA ciphertext artifact using the public key.
 
@@ -291,7 +291,7 @@ However, successful decryption and matching file hashes do not independently est
 
 #### Analyst Assessment
 
-**Assessment: RSA private-key decryption successfully recovered the original plaintext.**
+****Assessment: RSA private-key decryption successfully recovered the original plaintext.****
 
 The recovered file contained the expected message, produced an identical SHA-256 digest, and passed a direct byte-for-byte comparison.
 
@@ -326,8 +326,7 @@ OpenSSL rejected the operation with the error:
 
 ```text
 Public Key operation error
-rsa routines:ossl_rsa_padding_add_PKCS1_type_2_ex:
-data too large for key size
+rsa routines:ossl_rsa_padding_add_PKCS1_type_2_ex: data too large for key size
 ```
 
 The file was approximately 1 KiB, exceeding the maximum plaintext size supported by a single RSA encryption operation using the configured key and padding.
@@ -446,8 +445,7 @@ e14c001b653bf8c9570f7a560e0fe1e57bffd0c7494ec0624e559f47e569e887
 I also performed a byte-for-byte comparison:
 
 ```bash
-cmp large_file.bin recovered_large_file.bin &&
-  echo "Recovered file is identical"
+cmp large_file.bin recovered_large_file.bin && echo "Recovered file is identical"
 ```
 
 The output confirmed:
@@ -482,13 +480,13 @@ It also demonstrated a practical recovery workflow in which the RSA private key 
 
 However, this implementation was a learning exercise rather than a production-ready cryptographic file format.
 
-The `openssl pkeyutl` commands used default RSA encryption padding, and the AES-CBC ciphertext did not include authenticated integrity protection.
+The `openssl pkeyutl` commands used the default PKCS#1 v1.5 RSA encryption padding, and the AES-CBC ciphertext did not include authenticated integrity protection.
 
 A production design would require appropriate RSA padding, such as OAEP, an authenticated encryption scheme, secure private-key storage, and careful handling of recovered secret material.
 
 #### Analyst Assessment
 
-**Assessment: RSA's direct-encryption size limitation identified and a hybrid RSA/AES encryption workflow successfully validated.**
+****Assessment: RSA's direct-encryption size limitation identified and a hybrid RSA/AES encryption workflow successfully validated.****
 
 The initial RSA operation failed when attempting to encrypt the 1 KiB file.
 
@@ -517,7 +515,7 @@ The investigation demonstrated how RSA and AES can serve complementary purposes 
 
 The guided and independent RSA exercises used OpenSSL's `pkeyutl` encryption and decryption operations.
 
-The direct-encryption size-limit error identified PKCS#1 v1.5 encryption padding. For a 2048-bit RSA key, this permits a maximum plaintext size of 245 bytes in one operation.
+The direct-encryption size-limit error referenced PKCS#1 v1.5 encryption padding. For a 2048-bit RSA key, PKCS#1 v1.5 encryption padding allows up to 245 bytes of plaintext per operation (256-byte modulus minus 11 bytes of padding overhead).
 
 Although the exercise demonstrated successful encryption and decryption, PKCS#1 v1.5 encryption padding is not the preferred choice for new cryptographic designs.
 
@@ -543,7 +541,7 @@ Its confidentiality is therefore critical to protecting the encrypted data.
 
 The investigation demonstrated basic public/private key operations but did not implement enterprise private-key storage, key rotation, revocation, hardware-backed key protection, or centralized key management.
 
-The exercise also did not protect the RSA private key with an additional passphrase or investigate operational key-distribution procedures.
+The documented key-generation command did not specify private-key encryption; the exercise did not investigate operational key-distribution procedures.
 
 ## Evidence Limitations
 
@@ -551,49 +549,57 @@ This investigation was conducted in an authorized Linux lab environment using sy
 
 The following limitations apply:
 
-1. **Evidence scope:** Three screenshots preserve selected encryption, decryption, error, and verification output. They do not constitute a complete cryptographic operation log.
-
-2. **Key generation:** The 2048-bit RSA key-generation procedure is documented in the lab instructions, but the preserved screenshots primarily show subsequent cryptographic operations.
-
-3. **RSA size testing:** The independent exercise tested a single 1 KiB file. The failure demonstrates the configured RSA operation's size limitation, not every possible RSA padding configuration.
-
-4. **Padding:** The RSA encryption workflow used PKCS#1 v1.5 padding. RSA-OAEP was not implemented or evaluated.
-
-5. **Hybrid design:** The hybrid workflow combined RSA passphrase encryption with AES-256-CBC file encryption. It was not assessed as a production-ready encrypted-file format.
-
-6. **Integrity protection:** AES-CBC encryption did not provide authenticated ciphertext integrity. Matching recovery hashes and `cmp` results do not establish resistance to malicious modification.
-
-7. **Key management:** The exercise did not evaluate enterprise secret storage, private-key rotation, hardware security modules, or recovery governance.
-
-8. **Security evaluation:** No formal cryptographic audit, vulnerability assessment, or adversarial tampering test was conducted.
+1. ****Evidence scope:**** Three screenshots preserve selected encryption, decryption, error, and verification output. They do not constitute a complete cryptographic operation log.
+2. ****Key generation:**** The 2048-bit RSA key-generation procedure is documented in the lab instructions, but the preserved screenshots primarily show subsequent cryptographic operations.
+3. ****RSA size testing:**** The independent exercise tested a single 1 KiB file. The failure demonstrates the configured RSA operation's size limitation, not every possible RSA padding configuration.
+4. ****Padding:**** The RSA encryption workflow used PKCS#1 v1.5 padding. RSA-OAEP was not implemented or evaluated.
+5. ****Hybrid design:**** The hybrid workflow combined RSA passphrase encryption with AES-256-CBC file encryption. It was not assessed as a production-ready encrypted-file format.
+6. ****Integrity protection:**** AES-CBC encryption did not provide authenticated ciphertext integrity. Matching recovery hashes and `cmp` results do not establish resistance to malicious modification.
+7. ****Key management:**** The exercise did not evaluate enterprise secret storage, private-key rotation, hardware security modules, or recovery governance.
+8. ****Security evaluation:**** No formal cryptographic audit, vulnerability assessment, or adversarial tampering test was conducted.
 
 ## Skills Demonstrated
 
 ### Asymmetric Cryptography
 
 - Generated RSA public and private keys using OpenSSL.
+
 - Used public-key encryption to protect a small plaintext file.
+
 - Recovered encrypted data using the corresponding RSA private key.
+
 - Inspected RSA ciphertext size and hexadecimal output.
+
 - Identified the direct RSA encryption message-size limitation.
+
 - Interpreted OpenSSL cryptographic error output.
 
 ### Hybrid Encryption
 
 - Implemented AES-256-CBC encryption for larger test data.
+
 - Configured PBKDF2 with 100,000 iterations.
+
 - Used RSA to protect passphrase material required for symmetric decryption.
+
 - Recovered encrypted passphrase material using an RSA private key.
+
 - Used recovered secret material to decrypt a larger file.
+
 - Distinguished passphrase protection from direct AES key wrapping.
 
 ### Cryptographic Validation and Security Analysis
 
 - Verified file recovery using SHA-256 hashes.
+
 - Confirmed byte-for-byte equality using `cmp`.
+
 - Examined RSA padding and message-size constraints.
+
 - Distinguished confidentiality from authenticated integrity.
+
 - Evaluated the limitations of custom hybrid-encryption workflows.
+
 - Documented security observations with supporting technical evidence.
 
 ## Conclusion
