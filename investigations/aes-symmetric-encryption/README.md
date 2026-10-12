@@ -75,3 +75,83 @@ The report documents three findings:
 
 The final sections will summarize the security implications, evidence limitations, skills demonstrated, and supporting screenshots.
 
+## Investigation Findings
+
+### Finding 1 — AES-256-CBC Encryption and Ciphertext Inspection
+
+#### Investigation Context
+
+The first exercise examined file encryption using OpenSSL and AES-256 in Cipher Block Chaining (CBC) mode.
+
+The objective was to encrypt a plaintext file, inspect the resulting encrypted artifact, and determine what information could be observed without decrypting it.
+
+#### Encryption Procedure
+
+I encrypted a sample text file using OpenSSL:
+
+```bash
+openssl enc -aes-256-cbc -salt \
+  -in test_file.txt \
+  -out encrypted_file.bin \
+  -pass file:aes_key.bin
+```
+
+The command used AES-256-CBC, enabled salting, and read password material from `aes_key.bin`.
+
+The `-pass file:` option supplies passphrase material for OpenSSL's password-based key derivation. It does not directly load a raw AES-256 encryption key.
+
+#### Encrypted File Inspection
+
+Following encryption, I inspected the original and encrypted files.
+
+| Field | Observed Result |
+| --- | --- |
+| Original file | `test_file.txt` |
+| Original file size | 46 bytes |
+| Encrypted file | `encrypted_file.bin` |
+| Encrypted file size | 64 bytes |
+| File identification | `openssl enc'd data with salted password` |
+| Hex inspection command | `xxd encrypted_file.bin` |
+| Header | `Salted__` |
+| Header bytes | `53616c7465645f5f` |
+
+![AES encrypted file inspection](evidence/01-aes-encrypted-file-inspection.png)
+
+*Figure 1 — OpenSSL AES-256-CBC encryption of a sample file, showing the deprecated key-derivation warning, file-size comparison, salted file identification, and `Salted__` header in the hexadecimal output.*
+
+The encrypted file began with OpenSSL's `Salted__` marker, followed by salt bytes and ciphertext.
+
+The encrypted artifact was larger than the original because the OpenSSL salted format includes an 8-byte marker, an 8-byte salt, and block-aligned encrypted data.
+
+The hexadecimal inspection showed that the output was not stored as ordinary readable plaintext.
+
+However, a salted header and unreadable bytes alone do not prove that the encryption configuration is secure.
+
+#### Key-Derivation Warning
+
+During encryption, OpenSSL displayed the following warning:
+
+```text
+*** WARNING : deprecated key derivation used.
+Using -iter or -pbkdf2 would be better.
+```
+
+The command used OpenSSL's legacy password-based derivation behavior rather than explicitly enabling PBKDF2.
+
+This warning identified an improvement opportunity addressed in the independent investigation.
+
+#### Security Relevance
+
+Symmetric encryption helps protect stored information against unauthorized disclosure when suitable algorithms, key derivation, and secret-management practices are used.
+
+File inspection can help identify whether an artifact was processed by an encryption utility and what format was produced.
+
+Nevertheless, confirming an encrypted file format does not independently establish confidentiality against every threat or provide ciphertext integrity protection.
+
+#### Analyst Assessment
+
+**Assessment: AES-256-CBC encryption successfully produced an OpenSSL salted ciphertext artifact.**
+
+The original 46-byte plaintext file was converted into a 64-byte encrypted artifact containing the OpenSSL salted-file header.
+
+The encryption command also generated a deprecated key-derivation warning, motivating the subsequent PBKDF2 implementation.
