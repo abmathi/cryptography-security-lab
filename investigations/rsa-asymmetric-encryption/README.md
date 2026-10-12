@@ -196,3 +196,103 @@ The 40-byte plaintext file was encrypted into a 256-byte RSA ciphertext artifact
 Hexadecimal inspection and a plaintext-string search provided supporting evidence that the encrypted artifact differed from the original readable file.
 
 The result established a working small-file RSA encryption operation but did not independently validate decryption, authenticity, or suitability for larger files.
+
+### Finding 2 — RSA Private-Key Decryption and Recovery Verification
+
+#### Investigation Context
+
+The second exercise focused on recovering a previously encrypted file using the RSA private key.
+
+The objective was to verify that data encrypted with the RSA public key could be decrypted using the corresponding private key and that the recovered file matched the original plaintext.
+
+#### Private-Key Decryption
+
+I decrypted the RSA ciphertext using OpenSSL:
+
+```bash
+openssl pkeyutl \
+  -decrypt \
+  -in test_file_encrypted.bin \
+  -inkey private_key.pem \
+  -out test_file_decrypted.bin
+```
+
+The `-decrypt` option performed the private-key decryption operation using `private_key.pem`.
+
+The command produced `test_file_decrypted.bin`, containing the recovered plaintext.
+
+#### Plaintext Recovery
+
+I inspected the decrypted file:
+
+```bash
+cat test_file_decrypted.bin
+```
+
+The output was:
+
+```text
+This is a test file for RSA encryption.
+```
+
+This demonstrated that the RSA private key successfully recovered the plaintext encrypted during the previous exercise.
+
+#### SHA-256 Recovery Verification
+
+To validate the recovered contents, I calculated SHA-256 hashes for the original and decrypted files:
+
+```bash
+sha256sum test_file.txt test_file_decrypted.bin
+```
+
+Both files returned the same SHA-256 digest:
+
+```text
+f07a9fce5695d3f3dffad81079d6ed372cd18cd40a6c80b5f7543d6828f28202
+```
+
+| File | Verification Result |
+| --- | --- |
+| `test_file.txt` | Original plaintext reference |
+| `test_file_decrypted.bin` | Matching SHA-256 digest |
+| Comparison | No differences detected by hash comparison |
+
+#### Byte-for-Byte Verification
+
+I performed an additional comparison using `cmp`:
+
+```bash
+cmp test_file.txt test_file_decrypted.bin && echo "Files are identical"
+```
+
+The command returned:
+
+```text
+Files are identical
+```
+
+![RSA private-key decryption and verification](evidence/02-rsa-private-key-decryption.png)
+
+*Figure 2 — OpenSSL RSA private-key decryption recovering the original plaintext. Matching SHA-256 hashes and a successful `cmp` comparison confirm that the original and recovered files contain identical data.*
+
+The successful comparison confirmed that the recovered file contained the same bytes as the original plaintext.
+
+Together, the SHA-256 and `cmp` results provided evidence of accurate file recovery rather than relying solely on the absence of an OpenSSL error.
+
+#### Security Relevance
+
+Asymmetric encryption separates the key used for encryption from the private key required for decryption.
+
+In this exercise, the public key was used to encrypt the original file, while the private key recovered its contents.
+
+This separation is useful in secure key-distribution and hybrid-encryption workflows, where sensitive decryption material should not be shared with the sender.
+
+However, successful decryption and matching file hashes do not independently establish the sender's identity or demonstrate authenticated integrity protection.
+
+#### Analyst Assessment
+
+**Assessment: RSA private-key decryption successfully recovered the original plaintext.**
+
+The recovered file contained the expected message, produced an identical SHA-256 digest, and passed a direct byte-for-byte comparison.
+
+This confirmed successful RSA encryption and decryption for the small test file and established a baseline for the independent hybrid-encryption investigation.
