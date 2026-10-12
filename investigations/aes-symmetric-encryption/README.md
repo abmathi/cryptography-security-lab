@@ -238,3 +238,171 @@ However, AES-CBC encryption does not independently provide authenticated integri
 The decryption operation produced the expected plaintext, and SHA-256 comparison confirmed that the recovered file matched the original.
 
 The repeated key-derivation warning reinforced the need to improve the encryption workflow using PBKDF2 in the independent investigation.
+
+### Finding 3 — Independent PBKDF2 Encryption and Validation
+
+#### Investigation Context
+
+To extend the guided encryption exercise, I conducted an independent investigation involving a simulated credentials file requiring protection at rest.
+
+The original exercise demonstrated AES-256-CBC encryption but generated an OpenSSL warning about deprecated password-based key derivation.
+
+The independent investigation addressed that limitation by enabling PBKDF2 with 100,000 iterations and testing ciphertext confidentiality, incorrect-passphrase behavior, and successful file recovery.
+
+All credentials used in this exercise were synthetic.
+
+#### Improved Encryption Procedure
+
+I generated separate random passphrase material and restricted access to its file:
+
+```bash
+openssl rand -base64 32 > credentials_key.txt
+chmod 600 credentials_key.txt
+```
+
+I then encrypted the simulated credentials file:
+
+```bash
+openssl enc -aes-256-cbc \
+  -salt \
+  -pbkdf2 \
+  -iter 100000 \
+  -in credentials.txt \
+  -out credentials.enc \
+  -pass file:credentials_key.txt
+```
+
+| Parameter | Purpose |
+| --- | --- |
+| `-aes-256-cbc` | Select AES-256 in CBC mode |
+| `-salt` | Use a salt in password-based key derivation |
+| `-pbkdf2` | Enable PBKDF2 key derivation |
+| `-iter 100000` | Configure 100,000 PBKDF2 iterations |
+| `-pass file:` | Read passphrase material from a local file |
+
+Unlike the guided exercise, this operation did not generate the deprecated key-derivation warning.
+
+PBKDF2 improved the password-based derivation configuration but did not change AES-CBC into an authenticated encryption mode.
+
+#### Ciphertext Inspection and Plaintext Exposure Test
+
+I inspected the encrypted artifact using the following commands:
+
+```bash
+file credentials.enc
+xxd credentials.enc
+strings credentials.enc
+grep -aE "Database|backup_service|LabOnly" credentials.enc
+```
+
+The inspection produced the following results:
+
+| Test | Observation |
+| --- | --- |
+| `file` | Identified OpenSSL encrypted data with a salted password |
+| `xxd` | Displayed the `Salted__` header and binary ciphertext |
+| `strings` | Did not expose recognizable credential content |
+| `grep` | Returned no matches for the selected plaintext indicators |
+
+These results demonstrated that the tested plaintext strings were not trivially present in the encrypted artifact.
+
+However, searching ciphertext for readable strings is a limited validation technique and does not independently establish resistance to cryptographic attacks.
+
+#### Incorrect-Passphrase Decryption Test
+
+I generated separate random passphrase material and attempted to decrypt the encrypted file:
+
+```bash
+openssl rand -base64 32 > wrong_key.txt
+chmod 600 wrong_key.txt
+
+openssl enc -d -aes-256-cbc \
+  -pbkdf2 \
+  -iter 100000 \
+  -in credentials.enc \
+  -out wrong_decryption.txt \
+  -pass file:wrong_key.txt
+```
+
+OpenSSL returned:
+
+```text
+bad decrypt
+```
+
+The incorrect passphrase did not successfully recover the original file.
+
+This result demonstrated a failed recovery attempt using different passphrase material. It should not be interpreted as authenticated integrity verification because AES-CBC encryption alone does not provide authentication.
+
+#### Successful Decryption and Recovery
+
+I repeated the decryption using the original passphrase material:
+
+```bash
+openssl enc -d -aes-256-cbc \
+  -pbkdf2 \
+  -iter 100000 \
+  -in credentials.enc \
+  -out credentials_decrypted.txt \
+  -pass file:credentials_key.txt
+```
+
+The operation completed, producing the recovered credentials file.
+
+#### SHA-256 and Byte-for-Byte Verification
+
+To verify the recovered content, I calculated SHA-256 hashes for both files:
+
+```bash
+sha256sum credentials.txt credentials_decrypted.txt
+```
+
+Both files produced the same digest:
+
+```text
+c516f309bb03b0244815a81591910106f97d30a1d9667b38eb8ae8e71ff5b0ba
+```
+
+I also performed a direct file comparison:
+
+```bash
+cmp credentials.txt credentials_decrypted.txt &&
+  echo "Files are identical"
+```
+
+The command returned:
+
+```text
+Files are identical
+```
+
+| Validation | Result |
+| --- | --- |
+| Incorrect-passphrase decryption | Failed with `bad decrypt` |
+| Correct-passphrase decryption | Completed |
+| SHA-256 comparison | Matching digests |
+| `cmp` comparison | Files identical |
+
+![Independent AES encryption validation](evidence/03-independent-encryption-validation.png)
+
+*Figure 3 — Independent AES-256-CBC recovery validation using PBKDF2 with 100,000 iterations. The incorrect-passphrase attempt returned `bad decrypt`, while the correct passphrase recovered the file. Matching SHA-256 hashes and `cmp` confirmed identical contents.*
+
+The matching hashes and byte-for-byte comparison confirmed that the recovered file matched the original test data.
+
+#### Security Relevance
+
+This investigation demonstrated how encryption configuration affects the security and reliability of a file-protection workflow.
+
+Using PBKDF2 with an explicit iteration count addressed the deprecated derivation method used during the guided exercise.
+
+The ciphertext inspection did not reveal the tested plaintext indicators, while the recovery checks confirmed that authorized decryption reproduced the original file.
+
+However, AES-256-CBC does not independently protect ciphertext integrity. A production implementation requiring confidentiality and authenticity should use an appropriately implemented authenticated-encryption design, with secure key management.
+
+#### Analyst Assessment
+
+**Assessment: AES-256-CBC encryption with PBKDF2 successfully implemented and independently validated.**
+
+The investigation improved the original password-based key derivation configuration, tested incorrect-passphrase behavior, and verified successful recovery through matching SHA-256 hashes and direct file comparison.
+
+The results demonstrated practical encryption and validation skills while identifying the integrity limitations of AES-CBC.
