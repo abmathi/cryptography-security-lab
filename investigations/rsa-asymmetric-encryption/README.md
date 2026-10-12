@@ -497,3 +497,127 @@ The hybrid approach successfully encrypted the larger file using AES-256-CBC, pr
 Matching SHA-256 hashes and a byte-for-byte comparison confirmed successful recovery in the controlled test.
 
 The investigation demonstrated both the practical value of hybrid encryption and the importance of distinguishing successful cryptographic operations from production-level security guarantees.
+
+## Security Implications
+
+The investigation demonstrated how RSA and AES can serve complementary purposes in a file-encryption workflow.
+
+| Security Area | Observation | Security Implication |
+| --- | --- | --- |
+| Asymmetric encryption | RSA public-key encryption successfully protected a small test file | Data can be encrypted using a recipient's public key without sharing the corresponding private key |
+| Private-key recovery | RSA decryption recovered the original plaintext | Access to the corresponding private key is necessary for the demonstrated recovery process |
+| RSA message-size limitation | Direct encryption of a 1 KiB file failed | RSA is not suitable for direct encryption of arbitrary-size files |
+| Symmetric encryption | AES-256-CBC encrypted the larger file | Symmetric cryptography can efficiently protect bulk data |
+| Hybrid encryption | RSA protected AES passphrase material | Asymmetric encryption can protect the smaller secret required for symmetric decryption |
+| Password-based derivation | PBKDF2 used 100,000 iterations | Password-based encryption can use configurable derivation costs |
+| Recovery verification | SHA-256 and `cmp` confirmed identical files | Independent verification supports confidence in successful recovery |
+| Cryptographic integrity | AES-CBC did not provide authenticated encryption | Successful decryption must not be confused with tamper resistance |
+
+### RSA Padding Considerations
+
+The guided and independent RSA exercises used OpenSSL's `pkeyutl` encryption and decryption operations.
+
+The direct-encryption size-limit error identified PKCS#1 v1.5 encryption padding. For a 2048-bit RSA key, this permits a maximum plaintext size of 245 bytes in one operation.
+
+Although the exercise demonstrated successful encryption and decryption, PKCS#1 v1.5 encryption padding is not the preferred choice for new cryptographic designs.
+
+A production-oriented implementation should consider RSA-OAEP with an appropriate hash configuration and a well-defined encrypted-data format.
+
+The investigation did not implement or compare RSA-OAEP.
+
+### Hybrid Encryption Considerations
+
+The independent workflow used RSA to protect randomly generated passphrase material, while AES-256-CBC encrypted the larger file.
+
+The passphrase was used by OpenSSL's password-based key derivation rather than acting as a raw AES key.
+
+This distinction matters because password-based encryption and direct symmetric-key encryption involve different key-handling and derivation procedures.
+
+A production hybrid-encryption implementation should use an established cryptographic format or library rather than relying on an ad hoc combination of commands.
+
+### Key Management Considerations
+
+The RSA private key was necessary to recover the AES passphrase.
+
+Its confidentiality is therefore critical to protecting the encrypted data.
+
+The investigation demonstrated basic public/private key operations but did not implement enterprise private-key storage, key rotation, revocation, hardware-backed key protection, or centralized key management.
+
+The exercise also did not protect the RSA private key with an additional passphrase or investigate operational key-distribution procedures.
+
+## Evidence Limitations
+
+This investigation was conducted in an authorized Linux lab environment using synthetic test files.
+
+The following limitations apply:
+
+1. **Evidence scope:** Three screenshots preserve selected encryption, decryption, error, and verification output. They do not constitute a complete cryptographic operation log.
+
+2. **Key generation:** The 2048-bit RSA key-generation procedure is documented in the lab instructions, but the preserved screenshots primarily show subsequent cryptographic operations.
+
+3. **RSA size testing:** The independent exercise tested a single 1 KiB file. The failure demonstrates the configured RSA operation's size limitation, not every possible RSA padding configuration.
+
+4. **Padding:** The RSA encryption workflow used PKCS#1 v1.5 padding. RSA-OAEP was not implemented or evaluated.
+
+5. **Hybrid design:** The hybrid workflow combined RSA passphrase encryption with AES-256-CBC file encryption. It was not assessed as a production-ready encrypted-file format.
+
+6. **Integrity protection:** AES-CBC encryption did not provide authenticated ciphertext integrity. Matching recovery hashes and `cmp` results do not establish resistance to malicious modification.
+
+7. **Key management:** The exercise did not evaluate enterprise secret storage, private-key rotation, hardware security modules, or recovery governance.
+
+8. **Security evaluation:** No formal cryptographic audit, vulnerability assessment, or adversarial tampering test was conducted.
+
+## Skills Demonstrated
+
+### Asymmetric Cryptography
+
+- Generated RSA public and private keys using OpenSSL.
+- Used public-key encryption to protect a small plaintext file.
+- Recovered encrypted data using the corresponding RSA private key.
+- Inspected RSA ciphertext size and hexadecimal output.
+- Identified the direct RSA encryption message-size limitation.
+- Interpreted OpenSSL cryptographic error output.
+
+### Hybrid Encryption
+
+- Implemented AES-256-CBC encryption for larger test data.
+- Configured PBKDF2 with 100,000 iterations.
+- Used RSA to protect passphrase material required for symmetric decryption.
+- Recovered encrypted passphrase material using an RSA private key.
+- Used recovered secret material to decrypt a larger file.
+- Distinguished passphrase protection from direct AES key wrapping.
+
+### Cryptographic Validation and Security Analysis
+
+- Verified file recovery using SHA-256 hashes.
+- Confirmed byte-for-byte equality using `cmp`.
+- Examined RSA padding and message-size constraints.
+- Distinguished confidentiality from authenticated integrity.
+- Evaluated the limitations of custom hybrid-encryption workflows.
+- Documented security observations with supporting technical evidence.
+
+## Conclusion
+
+This investigation demonstrated RSA asymmetric encryption, private-key decryption, and a hybrid RSA/AES file-protection workflow using OpenSSL.
+
+The guided exercise established successful encryption and recovery of a small plaintext file.
+
+The independent investigation exposed a practical limitation when direct RSA encryption failed on a 1 KiB file.
+
+By using AES-256-CBC to encrypt the larger file and RSA to protect the smaller passphrase material, the hybrid workflow successfully recovered the original file.
+
+Matching SHA-256 hashes and direct file comparison confirmed that the recovered data matched the original.
+
+The principal outcome was understanding how RSA and AES complement each other while recognizing the importance of appropriate padding, authenticated encryption, and secure key management.
+
+These techniques provide foundational experience relevant to data protection, secure system design, cryptographic troubleshooting, and security engineering.
+
+## Evidence Index
+
+| Figure | Evidence File | Description |
+| --- | --- | --- |
+| 1 | `01-rsa-public-key-encryption.png` | RSA public-key encryption, ciphertext size, and file inspection |
+| 2 | `02-rsa-private-key-decryption.png` | Private-key decryption and SHA-256 recovery verification |
+| 3 | `03-hybrid-encryption-validation.png` | RSA size-limit error, hybrid encryption, and successful file recovery |
+
+All screenshots are located in the accompanying [`evidence/`](evidence/) directory.
