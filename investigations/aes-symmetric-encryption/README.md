@@ -155,3 +155,86 @@ Nevertheless, confirming an encrypted file format does not independently establi
 The original 46-byte plaintext file was converted into a 64-byte encrypted artifact containing the OpenSSL salted-file header.
 
 The encryption command also generated a deprecated key-derivation warning, motivating the subsequent PBKDF2 implementation.
+
+### Finding 2 — Decryption and File Recovery Verification
+
+#### Investigation Context
+
+The second exercise focused on recovering the original plaintext from an AES-256-CBC encrypted file.
+
+The objective was to confirm that the correct passphrase material could successfully decrypt the ciphertext and to verify that the recovered file matched the original.
+
+#### Decryption Procedure
+
+I decrypted the previously generated ciphertext using OpenSSL:
+
+```bash
+openssl enc -d -aes-256-cbc \
+  -in encrypted_file.bin \
+  -out decrypted_file.txt \
+  -pass file:aes_key.bin
+```
+
+The command used the same AES cipher mode and passphrase source as the encryption operation.
+
+OpenSSL displayed the same deprecated key-derivation warning observed during encryption, confirming that the guided workflow continued to use the legacy password-based derivation method.
+
+#### Plaintext Recovery
+
+After decryption, I inspected the output file:
+
+```bash
+cat decrypted_file.txt
+```
+
+The recovered contents were:
+
+```text
+This is a sample file for AES encryption lab.
+```
+
+The successful recovery demonstrated that the ciphertext could be decrypted using the appropriate passphrase material.
+
+#### SHA-256 Verification
+
+To verify the recovered file, I calculated SHA-256 hashes for the original and decrypted files:
+
+```bash
+sha256sum test_file.txt decrypted_file.txt
+```
+
+Both files produced the same SHA-256 digest:
+
+```text
+8acbe28ee8979cd7ff0b1d68ddcbed4a290031f93f1a6f29336409434071b454
+```
+
+| File | Verification Result |
+| --- | --- |
+| `test_file.txt` | Original reference file |
+| `decrypted_file.txt` | Matching SHA-256 digest |
+| Comparison | No content differences detected by hash comparison |
+
+![AES decryption and SHA-256 file verification](evidence/02-decryption-integrity-verification.png)
+
+*Figure 2 — OpenSSL AES-256-CBC decryption showing successful plaintext recovery and identical SHA-256 hashes for `test_file.txt` and `decrypted_file.txt`. The deprecated key-derivation warning remained present.*
+
+Matching cryptographic hashes provide strong evidence that the recovered file was identical to the original during this test.
+
+This verification was performed after decryption and should not be confused with authenticated encryption or automatic ciphertext-integrity protection.
+
+#### Security Relevance
+
+File encryption must be paired with reliable recovery procedures to ensure that protected information remains usable by authorized users.
+
+Verifying decrypted output helps identify incorrect secret material, corrupted data, and unexpected changes during the encryption/decryption workflow.
+
+However, AES-CBC encryption does not independently provide authenticated integrity protection. The successful file comparison demonstrates recovery in this controlled exercise, not resistance to malicious ciphertext modification.
+
+#### Analyst Assessment
+
+**Assessment: Original plaintext successfully recovered and verified through matching SHA-256 hashes.**
+
+The decryption operation produced the expected plaintext, and SHA-256 comparison confirmed that the recovered file matched the original.
+
+The repeated key-derivation warning reinforced the need to improve the encryption workflow using PBKDF2 in the independent investigation.
